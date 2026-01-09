@@ -1,0 +1,61 @@
+【指示】
+        ありがとうございます。先ほど提示した英文（以下の【提示済み英文】を参照）に基づき、
+        「(B) 理解度チェック」のルールに従って、
+        {grade} レベルの「簡単な英語の理解度チェック問題」を生成してください。
+
+        マルバツ問題や選択肢問題は、必ず以下の**拡張書式**に従って生成してください。
+        
+        QUESTION: [Simple English Question]
+        CHOICES: [Choice A],[Choice B],[Choice C]
+        ANSWER: [Correct Choice]
+        
+        **具体例:**
+        QUESTION: Is the dog in the park?
+        CHOICES: [Yes],[No],[Not in the story]
+        ANSWER: [Yes]
+        
+        **重要：** `ANSWER:` タグを省略してはいけません。
+        **(★ 新ルール) 選択肢 (CHOICES) は、[Yes],[No] のような2択は許可しません。必ず3個以上の選択肢（例: [Yes],[No],[Not in the story]）を提示してください。**
+        
+        【提示済み英文】
+        {english_for_prompt}
+        
+        （B）理解度チェック（レベル別）
+        【小学生以下】
+        提示した簡単な英単語に関する、「とても簡単なマルバツ問題」（例：Is this a dog?）を拡張書式に従って1問出してください。（選択肢は3個以上）
+        【1～2年生】
+        提示した簡単な英文に関する、「簡単なマルバツ問題」（例：Is the dog happy?）を拡張書式に従って1問出してください。（選択肢は3個以上）
+        【3～4年生】
+        英文の内容に関する「簡単なマルバツ問題（Yes/No/Not in the story）」を拡張書式に従って**1〜2問**提示してください。（選択肢は3個以上）
+        【5～6年生】
+        英文の内容に関する「簡単な3択問題」を拡張書式に従って**2〜3問**程度提示してください。（選択肢は3個以上）
+        【CEFRレベル別ルール（追加）】
+※ 学年指定に加えて、CEFRレベル（例: CEFR Pre-A1 / CEFR A1 / CEFR A2）が与えられている場合は、必ず以下を厳守して問題を1問だけ生成してください。与えられていない場合はA1として扱ってください。
+
+- CEFR Pre-A1
+  ・QUESTIONは超短い平易な英文にし、単一事実の確認のみを問う。
+  ・形式は True/False/Not in the story の3択（CHOICESは3個以上を必須）。
+  ・語彙はごく基本語のみ。否定・推論は使わない。
+
+- CEFR A1
+  ・QUESTIONは短文（6–10語目安）。日常語彙で意味理解を問う。
+  ・形式は「Yes/No/Not in the story」3択 または 1語穴埋め（CHOICESは3個以上）。
+  ・否定文・対比（but）などは使用可だが、推論は最小限。
+
+- CEFR A2
+  ・QUESTIONは8–12語程度の短文。because / so / when などで理由や結果の理解を問う。
+  ・形式は内容正誤（Yes/No/Not in the story）または語句選択3択（CHOICESは3個以上）。
+  ・直接の表面一致でなく、短い因果関係や置換表現の理解を求める。
+
+【生成ルール（厳守）】
+- この呼び出しでは **必ず1問のみ** を生成すること（複数出題はしない）。
+- `QUESTION: ...` → `CHOICES: [...]` → `ANSWER: [...]` の**拡張書式を厳守**する。
+- `ANSWER:` を省略しない。`CHOICES` は **3個以上**。
+- 【提示済み英文】に**明示されていない事実を正解としない**（推測で補完しない）。
+- 誘導選択肢は**もっともらしいが本文と矛盾しない**ものを作る（トリック不可）。
+- 直前に出した問題と**重複しない新事実**を問う（可能なら異なる文や観点を使う）。
+[CEFR-level question design]
+- CEFR Pre-A1: Ask simple word identification or T/F questions (3 choices).
+- CEFR A1: Ask short comprehension questions about who/what/where (3 choices).
+- CEFR A2: Ask reason or cause-effect questions using “because/so” (3 choices).
+Ensure CHOICES are plausible and at least 3.

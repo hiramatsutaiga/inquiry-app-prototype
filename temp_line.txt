@@ -1,0 +1,1 @@
+    # v21.0から変更なぁE        # v21.1: Threaded API runner with simple 429 retry handling

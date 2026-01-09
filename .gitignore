@@ -1,0 +1,12 @@
+# secrets
+service_account_key.json
+taigakey.txt
+profile.json
+
+# python
+__pycache__/
+*.pyc
+
+# misc
+.env
+.vscode/

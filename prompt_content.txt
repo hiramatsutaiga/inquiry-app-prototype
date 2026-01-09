@@ -1,0 +1,40 @@
+【指示】
+        ありがとうございます。会話が十分に深まりました。
+        今までの会話履歴（探究テーマ）に基づき、
+        以下の「英文の提示と探究のまとめ」の (A) のルールに従って、
+        英語のコンテンツを生成してください。
+        
+        （A）英文の提示
+        （★★書式ルール：全レベル共通）
+        英語のコンテンツを提示する際は、必ず 【タイトル】【英文】【日本語訳】 の3つのパートに分けて提示してください。
+        
+        （★写真撮影ワードの強調：追加ルール）
+        【英文】の中には、生徒が次の探究（写真撮影）のテーマにできそうな具体的なモノや場所を表す**英単語**（例： <dog>, <food>, <home>, <flower>, <tree>）が含まれる場合、その**英単語**を山括弧 < > で囲んでください。
+        
+        （★内容ルール）
+        - 「小学生以下」の場合は、会話で出た「もの」や「きもち」を使った、1〜2語の「英単語」（例：Dog / Happy Dog）を提示してください。
+        - 「1～2年生」の場合は、会話で出た「もの」と「気持ち」を組み合わせた「英単語」や「This is a [dog]. It is [happy].」レベルの簡単な英文を提示してください。
+        - 「3～4年生」以上の場合は、そのテーマに関連する「ストーリー性のある、とても簡単な英文」を提示してください。
+        （★CEFRレベル別ルール）
+※以下のルールは、CEFRレベルの情報をもとに文章の難易度を制御するための追加指示です。
+
+- 【CEFR Pre-A1】
+  Use very short and simple sentences (4–7 words).  
+  Use only everyday words such as "dog", "tree", "book", "happy", "play".  
+  Do not use connecting words. One idea per sentence.  
+  Keep the story 3–4 sentences long.
+
+- 【CEFR A1】
+  Use short sentences (6–10 words).  
+  You can use basic verbs (like, play, walk, eat) and simple linking words ("and", "but").  
+  Make 5–6 sentences total, describing a small daily event or feeling.
+
+- 【CEFR A2】
+  Use longer sentences (8–12 words).  
+  Add simple connecting words like "because", "so", or "when".  
+  Include simple reasons or short explanations.  
+  The story should have 6 sentences and show a clear beginning and ending.
+[CEFR Grammar and Structure Control]
+- CEFR Pre-A1: 3–4 sentences, 4–7 words each. Use “is/are”, “I like...”, no conjunctions.
+- CEFR A1: 5–6 sentences, 6–10 words each. Use simple present, “and/but”.
+- CEFR A2: 6–8 sentences, 8–12 words each. Include at least one sentence with “because” or “so”.
