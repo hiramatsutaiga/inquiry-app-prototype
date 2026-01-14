@@ -55,8 +55,48 @@ class APIClients:
         return [l.description for l in response.label_annotations]
 
 def read_txt(filename: str) -> str:
-    with open(os.path.join(BASE_DIR, filename), "r", encoding="utf-8") as f:
+    path = os.path.join(BASE_DIR, filename)
+    if not os.path.exists(path):
+        return ""
+    for enc in ("utf-8", "utf-8-sig", "cp932"):
+        try:
+            with open(path, "r", encoding=enc) as f:
+                return f.read()
+        except UnicodeDecodeError:
+            continue
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
         return f.read()
+
+class _SafeDict(dict):
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+def render_prompt(filename: str, **kwargs) -> str:
+    template = read_txt(filename)
+    if not template:
+        return ""
+    return template.format_map(_SafeDict(kwargs))
+
+def build_prompt_from_file(filename: str, fallback_text: str, **kwargs) -> str:
+    template = render_prompt(filename, **kwargs)
+    if template:
+        return f"{template}\n\n{fallback_text}"
+    return fallback_text
+def parse_question_choices(text: str):
+    if not text:
+        return "", []
+    m = re.search(r"QUESTION:\s*(.+?)\s*CHOICES:\s*(.+)", text, re.S | re.I)
+    if not m:
+        return "", []
+    question = m.group(1).strip()
+    choices_raw = m.group(2).strip()
+    m2 = re.search(r"\bANSWER\s*:", choices_raw, re.I)
+    if m2:
+        choices_raw = choices_raw[:m2.start()].strip()
+    choices = [c.strip() for c in re.findall(r"\[(.*?)\]", choices_raw)]
+    return question, choices
+
+
 
 try:
     if os.path.exists(SERVICE_ACCOUNT_KEY_PATH):
@@ -198,6 +238,21 @@ Format it EXACTLY like this (with the [TRANSLATION] tag):
 """
     else:
          master_prompt_text = f"You are a helpful assistant. Please talk in simple English. (Grade: {grade}) (Level: {student_level}) (No keyword provided)"
+    initial_context = f"Keyword: {context_keyword}" if context_keyword else "Keyword: (none)"
+    if vision_labels:
+        vision_context = f"Vision labels: {', '.join(vision_labels)}"
+    else:
+        vision_context = "Vision labels: (none)"
+
+    master_prompt_text = build_prompt_from_file(
+        "prompt_master.txt",
+        master_prompt_text,
+        grade=grade,
+        guide_level=student_level,
+        initial_context=initial_context,
+        vision_context=vision_context
+    )
+
 
     if context_image is not None:
         return [master_prompt_text, context_image]
@@ -718,6 +773,13 @@ Rules:
 {{"quizzes":[{{"type":"True/False","question":"...","choices":["True","False"],"answer":"True"}},{{"type":"Fill-in-the-blank","question":"... ___ ...","choices":["choice1","choice2","choice3"],"answer":"choice1"}}]}}
 - quizzes list length must be exactly {total_quizzes}.
 """
+        prompt = build_prompt_from_file(
+            "prompt_quiz.txt",
+            prompt,
+            grade=self.grade,
+            english_for_prompt=self.current_story_text or "(no story)"
+        )
+
         resp = chat.send_message(prompt)
         raw = resp.text.strip()
         parsed = None
@@ -748,6 +810,47 @@ Rules:
 
         print(f"[DEBUG] Bulk quiz generation: received {len(quizzes_out)} quizzes in one call.")
         return quizzes_out
+    def api_generate_tag_choices(self):
+        fallback_prompt = f"""
+Based on the story below, create a single question and 3-5 keyword choices.
+QUESTION: ...
+CHOICES: [Choice1],[Choice2],[Choice3]
+
+STORY:
+{self.current_story_text}
+"""
+        prompt = build_prompt_from_file(
+            "prompt_tag.txt",
+            fallback_prompt,
+            english_for_prompt=self.current_story_text,
+            grade=self.grade,
+            guide_level=self.student_level
+        )
+        chat = self.api.start_chat(history=[])
+        resp = chat.send_message(prompt)
+        return resp.text
+
+    def api_generate_mission_choices(self):
+        fallback_prompt = f"""
+Based on the story below, ask which keyword the student wants to photograph next.
+Use keywords from the story and include [ホームに戻る].
+QUESTION: ...
+CHOICES: [Choice1],[Choice2],[ホームに戻る]
+
+STORY:
+{self.current_story_text}
+"""
+        prompt = build_prompt_from_file(
+            "prompt_mission.txt",
+            fallback_prompt,
+            english_for_prompt=self.current_story_text,
+            grade=self.grade,
+            guide_level=self.student_level
+        )
+        chat = self.api.start_chat(history=[])
+        resp = chat.send_message(prompt)
+        return resp.text
+
 
 
     def api_generate_story(self):
@@ -778,7 +881,15 @@ Format it EXACTLY like this (with the [TRANSLATION] tag):
 [TRANSLATION]
 (ここに日本語訳...)
 """
-    
+        story_prompt = build_prompt_from_file(
+            "prompt_content.txt",
+            story_prompt,
+            english_for_prompt="(use chat history)",
+            grade=self.grade,
+            guide_level=self.student_level
+        )
+
+         
         
 
         chat = self.api.start_chat(history=self.conversation_history)
@@ -1370,7 +1481,13 @@ Here is the data from their learning session:
         self.quiz_submit_button.config(state=tk.NORMAL)
         
         quiz = self.quiz_data[self.current_quiz_index]
-        self.quiz_question_label.config(text=f"Q{self.current_quiz_index + 1}: {quiz['q']}")
+        q_type = (quiz.get("type") or "").strip()
+        type_tag = "T/F" if q_type.lower().startswith("true") else ("FIB" if q_type.lower().startswith("fill") else "")
+        prefix = f"Q{self.current_quiz_index + 1}"
+        if type_tag:
+            prefix = f"{prefix} [{type_tag}]"
+        self.quiz_question_label.config(text=f"{prefix}: {quiz['q']}")
+
         self.correct_answer = quiz["a"]
         
         if self.grade in ["小学生以下", "1-2年生", "3-4年生"]:
@@ -1382,6 +1499,12 @@ Here is the data from their learning session:
     # v21.0から変更なし
     def check_quiz_answer(self):
         selected_choice = self.quiz_answer_entry.get().strip()
+        normalized = selected_choice.strip().lower()
+        if normalized in ("t", "true"):
+            selected_choice = "True"
+        elif normalized in ("f", "false"):
+            selected_choice = "False"
+
         if not selected_choice: return 
 
         self.append_chat("You", selected_choice) 
@@ -1488,30 +1611,97 @@ Here is the data from their learning session:
             w.destroy()
         self.content_word_picker_frame = None
         tk.Label(self.continue_inquiry_frame, text="What would you like to do next?", font=("", 14, "bold")).pack(pady=20)
+
+        self.mission_frame = tk.Frame(self.continue_inquiry_frame)
+        self.mission_frame.pack(pady=10, fill=tk.X)
+        tk.Label(self.mission_frame, text="Next photo mission", font=("", 12, "bold")).pack()
+        self.mission_question_label = tk.Label(self.mission_frame, text="Generating mission...", wraplength=700, justify=tk.LEFT)
+        self.mission_question_label.pack(pady=4)
+        self.mission_buttons_frame = tk.Frame(self.mission_frame); self.mission_buttons_frame.pack(pady=4)
+
         self.content_word_picker_frame = tk.Frame(self.continue_inquiry_frame)
         self.content_word_picker_frame.pack(pady=10)
-        tk.Label(self.content_word_picker_frame, text="Choose a new keyword to continue exploring this photo:",
-                 font=("",12)).pack(pady=6)
-        btns_frame = tk.Frame(self.content_word_picker_frame); btns_frame.pack(pady=4)
-        
+        self.tag_question_label = tk.Label(self.content_word_picker_frame, text="Choose a new keyword to continue exploring this photo:", font=("",12))
+        self.tag_question_label.pack(pady=6)
+        self.tag_buttons_frame = tk.Frame(self.content_word_picker_frame); self.tag_buttons_frame.pack(pady=4)
+        tk.Label(self.tag_buttons_frame, text="Loading tag suggestions...", fg="gray").pack()
+
         current_theme_used_words = set()
         for theme in self.theme_history:
             if "image_data" in theme and theme["image_data"] == self.initial_image_data:
                 current_theme_used_words = set(theme.get("word_sessions", {}).keys())
                 break
-        
-        words = self._build_words_from_labels(self.initial_image_labels, limit=10)
-        words = [w for w in words if w not in current_theme_used_words][:10]
-        
-        if not words:
-            tk.Label(btns_frame, text="No more keywords available for this photo.", fg="gray").pack()
-        else:
-            for w in words:
-                b = tk.Button(btns_frame, text=w, width=18, command=lambda x=w: self.on_word_selected_from_content(x))
-                b.pack(side=tk.LEFT, padx=4, pady=4)
+        self.current_theme_used_words = current_theme_used_words
+
+        self.run_api_in_thread(self.api_generate_tag_choices, self.handle_tag_response,
+                               message="Generating tag choices (Gemini)...")
+        self.run_api_in_thread(self.api_generate_mission_choices, self.handle_mission_response,
+                               message="Generating next mission (Gemini)...")
+
         tk.Frame(self.continue_inquiry_frame, height=2, bg="gray").pack(fill=tk.X, padx=50, pady=20)
         tk.Button(self.continue_inquiry_frame, text="Start a New Photo", font=("", 12, "bold"),
                   command=self.go_to_photo_selection).pack(pady=10)
+    
+
+    def handle_tag_response(self, ai_text):
+        if not getattr(self, "tag_buttons_frame", None):
+            return
+        for w in self.tag_buttons_frame.winfo_children():
+            w.destroy()
+
+        question, choices = parse_question_choices(ai_text or "")
+        if question:
+            self.tag_question_label.config(text=question)
+
+        if not choices:
+            words = self._build_words_from_labels(self.initial_image_labels, limit=10)
+            words = [w for w in words if w not in self.current_theme_used_words][:10]
+            choices = words
+
+        if not choices:
+            tk.Label(self.tag_buttons_frame, text="No more keywords available for this photo.", fg="gray").pack()
+            return
+
+        for w in choices:
+            b = tk.Button(self.tag_buttons_frame, text=w, width=18, command=lambda x=w: self.on_word_selected_from_content(x))
+            b.pack(side=tk.LEFT, padx=4, pady=4)
+
+    def handle_mission_response(self, ai_text):
+        if not getattr(self, "mission_buttons_frame", None):
+            return
+        for w in self.mission_buttons_frame.winfo_children():
+            w.destroy()
+
+        question, choices = parse_question_choices(ai_text or "")
+        if question:
+            self.mission_question_label.config(text=question)
+        else:
+            self.mission_question_label.config(text="Which keyword would you like to photograph next?")
+
+        if not choices:
+            choices = re.findall(r"<([^>]+)>", self.current_story_text or "")
+            choices = [c.strip() for c in choices if c.strip()]
+            if not choices:
+                choices = self._build_words_from_labels(self.initial_image_labels, limit=3)
+
+        choices = list(dict.fromkeys(choices))
+        if "ホームに戻る" not in choices:
+            choices.append("ホームに戻る")
+
+        for c in choices:
+            b = tk.Button(self.mission_buttons_frame, text=c, width=18, command=lambda x=c: self.on_mission_choice(x))
+            b.pack(side=tk.LEFT, padx=4, pady=4)
+
+        self.temp_mission_data = {"question": question or "", "choices": choices}
+
+    def on_mission_choice(self, choice):
+        if "ホームに戻る" in choice:
+            self.go_to_photo_selection()
+            return
+        self.current_daily_mission_word = choice
+        if hasattr(self, 'home_button'):
+            self.home_button.config(text=f'[Home (Target: "{self.current_daily_mission_word}")]')
+        messagebox.showinfo("Next Mission", f'Next mission set to "{choice}"')
 
     # v21.0から変更なし
     def on_word_selected_from_content(self, word):
